@@ -45,7 +45,7 @@ function App() {
       <div className="app">
         <aside className="sidebar">
           <div className="sidebar-logo">
-            <h2>PRODE</h2>
+            <h2>CLINICA DE LA VISION</h2>
             <span>Sistema de apuestas</span>
           </div>
           <nav className="sidebar-nav">
