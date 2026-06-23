@@ -7,6 +7,9 @@ export default function Apuestas() {
   const [fechaFiltro, setFechaFiltro] = useState("");
   const [scores, setScores] = useState({});
   const [guardados, setGuardados] = useState({});
+  
+  // ✨ NUEVO: Estado para saber si eres Administrador
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const fechasDisponibles = [...new Set(partidos.map((p) => p.fecha))].sort();
 
@@ -14,17 +17,16 @@ export default function Apuestas() {
     ? partidos.filter((p) => p.fecha === fechaFiltro)
     : partidos;
 
-  // 1. CAMBIO: Ahora obtenemos TODAS las apuestas del usuario para este partido usando .filter()
+  // Filtra TODAS las apuestas del usuario seleccionado para este partido
   const getTodasLasApuestas = (partidoId) =>
     apuestas.filter(
       (a) => a.usuarioId === usuarioSeleccionado?.id && a.partidoId === partidoId
     );
 
-  // 2. CAMBIO: El input ahora inicia vacío para escribir una NUEVA apuesta cada vez
   const getScore = (partidoId, side) => {
     const key = `${partidoId}-${side}`;
     if (scores[key] !== undefined) return scores[key];
-    return ""; // Siempre vacío al inicio para permitir registrar una nueva apuesta limpia
+    return ""; 
   };
 
   const setScore = (partidoId, side, val) => {
@@ -44,7 +46,6 @@ export default function Apuestas() {
     try {
       await guardarApuesta(usuarioSeleccionado.id, partido.id, gl, gv);
       
-      // Limpiamos los inputs para que Kevin pueda escribir otra apuesta si quiere
       setScores((prev) => ({
         ...prev,
         [`${partido.id}-local`]: "",
@@ -59,12 +60,73 @@ export default function Apuestas() {
     }
   };
 
+  // ✨ NUEVA FUNCIÓN: Permite al Admin eliminar un marcador erróneo
+  const handleEliminarApuesta = async (apuestaId) => {
+    if (!window.confirm("¿Seguro que deseas eliminar esta apuesta del usuario?")) return;
+    
+    try {
+      // Reemplaza con la URL real de tu backend si es necesario
+      const response = await fetch(`https://apuestas-back.vercel.app/api/apuestas/${apuestaId}`, {
+        method: "DELETE"
+      });
+      
+      if (response.ok) {
+        alert("Apuesta eliminada con éxito. Por favor refresca para ver los cambios.");
+        // Lo ideal aquí es que en el AppContext manejes un eliminarApuesta para limpiar el estado
+        window.location.reload(); 
+      } else {
+        alert("No se pudo eliminar la apuesta del servidor.");
+      }
+    } catch (error) {
+      console.error("Error al eliminar:", error);
+    }
+  };
+
+  // ✨ NUEVA FUNCIÓN: Activa el modo admin mediante una contraseña simple
+  const toggleAdminMode = () => {
+    if (!isAdmin) {
+      const pass = prompt("Introduce la contraseña de administrador:");
+      if (pass === "admin123") { // Puedes cambiar "admin123" por la clave que quieras
+        setIsAdmin(true);
+      } else {
+        alert("Contraseña incorrecta");
+      }
+    } else {
+      setIsAdmin(false);
+    }
+  };
+
   return (
     <div>
-      <div className="section-header">
-        <h1>Apuestas</h1>
-        <p>Selecciona un usuario y registra sus predicciones de resultado</p>
+      <div className="section-header" style={{ display: "flex", justifyContent: "between", alignItems: "center" }}>
+        <div>
+          <h1>Apuestas</h1>
+          <p>Selecciona un usuario y registra sus predicciones de resultado</p>
+        </div>
+        
+        {/* ✨ BOTÓN DE PANEL ADMIN */}
+        <button 
+          onClick={toggleAdminMode} 
+          style={{
+            padding: "8px 16px",
+            background: isAdmin ? "#e63946" : "var(--color-primario, #007bff)",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "bold"
+          }}
+        >
+          {isAdmin ? "🔒 Salir de Modo Admin" : "🔑 Modo Admin"}
+        </button>
       </div>
+
+      {/* Alerta visual si está en Modo Admin */}
+      {isAdmin && (
+        <div style={{ background: "#ffe3e3", color: "#b71c1c", padding: "10px", borderRadius: "6px", marginBottom: "16px", fontWeight: "bold", fontSize: "14px" }}>
+          ⚠️ Estás en MODO ADMINISTRADOR. Puedes ver y eliminar marcadores de cualquier usuario.
+        </div>
+      )}
 
       <div className="card">
         <div className="card-title">Seleccionar usuario</div>
@@ -137,7 +199,6 @@ export default function Apuestas() {
                 </thead>
                 <tbody>
                   {partidosMostrar.map((p) => {
-                    // Obtenemos la lista completa de apuestas hechas para este partido
                     const misApuestasPartidas = getTodasLasApuestas(p.id);
 
                     return (
@@ -154,12 +215,11 @@ export default function Apuestas() {
                             <span className="partido-nombre">{p.visitante}</span>
                           </div>
                           
-                          {/* 3. NUEVO: Renderizamos dinámicamente las apuestas que ya se guardaron */}
                           {misApuestasPartidas.length > 0 && (
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                               {misApuestasPartidas.map((ap, index) => (
                                 <span 
-                                  key={ap.id || index} 
+                                  key={ap.id || ap._id || index} 
                                   style={{
                                     fontSize: "11px",
                                     padding: "3px 8px",
@@ -167,10 +227,31 @@ export default function Apuestas() {
                                     borderRadius: "12px",
                                     color: "var(--texto-principal)",
                                     border: "1px solid rgba(0,0,0,0.1)",
-                                    display: "inline-block"
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px"
                                   }}
                                 >
                                   Marcador #{index + 1}: <b>{ap.golesLocal} - {ap.golesVisitante}</b>
+                                  
+                                  {/* ✨ BOTÓN ACCIÓN ADMIN: Solo aparece si isAdmin es true */}
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => handleEliminarApuesta(ap.id || ap._id)}
+                                      style={{
+                                        border: "none",
+                                        background: "transparent",
+                                        color: "#e63946",
+                                        cursor: "pointer",
+                                        fontWeight: "bold",
+                                        padding: "0 2px",
+                                        fontSize: "12px"
+                                      }}
+                                      title="Eliminar esta apuesta"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
                                 </span>
                               ))}
                             </div>
