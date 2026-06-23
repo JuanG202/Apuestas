@@ -14,17 +14,17 @@ export default function Apuestas() {
     ? partidos.filter((p) => p.fecha === fechaFiltro)
     : partidos;
 
-  const getApuesta = (partidoId) =>
-    apuestas.find(
+  // 1. CAMBIO: Ahora obtenemos TODAS las apuestas del usuario para este partido usando .filter()
+  const getTodasLasApuestas = (partidoId) =>
+    apuestas.filter(
       (a) => a.usuarioId === usuarioSeleccionado?.id && a.partidoId === partidoId
     );
 
+  // 2. CAMBIO: El input ahora inicia vacío para escribir una NUEVA apuesta cada vez
   const getScore = (partidoId, side) => {
     const key = `${partidoId}-${side}`;
     if (scores[key] !== undefined) return scores[key];
-    const ap = getApuesta(partidoId);
-    if (ap) return side === "local" ? ap.golesLocal : ap.golesVisitante;
-    return "";
+    return ""; // Siempre vacío al inicio para permitir registrar una nueva apuesta limpia
   };
 
   const setScore = (partidoId, side, val) => {
@@ -33,19 +33,24 @@ export default function Apuestas() {
     setGuardados((prev) => ({ ...prev, [partidoId]: false }));
   };
 
-  // Convertimos a función asíncrona para esperar la respuesta de la base de datos
   const handleGuardar = async (partido) => {
     if (!usuarioSeleccionado) return;
     
-    const gl = scores[`${partido.id}-local`] ?? getApuesta(partido.id)?.golesLocal ?? "";
-    const gv = scores[`${partido.id}-visitante`] ?? getApuesta(partido.id)?.golesVisitante ?? "";
+    const gl = scores[`${partido.id}-local`] ?? "";
+    const gv = scores[`${partido.id}-visitante`] ?? "";
     
     if (gl === "" || gv === "") return;
     
     try {
-      // Esperamos a que la petición termine en el servidor
       await guardarApuesta(usuarioSeleccionado.id, partido.id, gl, gv);
       
+      // Limpiamos los inputs para que Kevin pueda escribir otra apuesta si quiere
+      setScores((prev) => ({
+        ...prev,
+        [`${partido.id}-local`]: "",
+        [`${partido.id}-visitante`]: ""
+      }));
+
       setGuardados((prev) => ({ ...prev, [partido.id]: true }));
       setTimeout(() => setGuardados((prev) => ({ ...prev, [partido.id]: false })), 2000);
     } catch (error) {
@@ -125,56 +130,87 @@ export default function Apuestas() {
                 <thead>
                   <tr>
                     <th>Fecha</th>
-                    <th>Partido</th>
-                    <th style={{ textAlign: "center" }}>Predicción</th>
+                    <th>Partido e Historial de Apuestas</th>
+                    <th style={{ textAlign: "center" }}>Nueva Predicción</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {partidosMostrar.map((p) => (
-                    <tr key={p.id}>
-                      <td style={{ color: "var(--texto-suave)", fontSize: 12, whiteSpace: "nowrap" }}>
-                        {new Date(p.fecha + "T00:00:00").toLocaleDateString("es-CO", {
-                          day: "2-digit", month: "short",
-                        })}
-                      </td>
-                      <td>
-                        <span className="partido-nombre">{p.local}</span>
-                        <span className="vs-text" style={{ margin: "0 8px" }}>vs</span>
-                        <span className="partido-nombre">{p.visitante}</span>
-                      </td>
-                      <td>
-                        <div className="score-pair" style={{ justifyContent: "center" }}>
-                          <input
-                            className="score-input"
-                            type="number"
-                            min="0"
-                            max="99"
-                            value={getScore(p.id, "local")}
-                            onChange={(e) => setScore(p.id, "local", e.target.value)}
-                          />
-                          <span className="score-sep">–</span>
-                          <input
-                            className="score-input"
-                            type="number"
-                            min="0"
-                            max="99"
-                            value={getScore(p.id, "visitante")}
-                            onChange={(e) => setScore(p.id, "visitante", e.target.value)}
-                          />
-                        </div>
-                      </td>
-                      <td>
-                        {guardados[p.id] ? (
-                          <span className="apuesta-saved">✓ Guardado</span>
-                        ) : (
-                          <button className="btn-save" onClick={() => handleGuardar(p)}>
-                            Guardar
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {partidosMostrar.map((p) => {
+                    // Obtenemos la lista completa de apuestas hechas para este partido
+                    const misApuestasPartidas = getTodasLasApuestas(p.id);
+
+                    return (
+                      <tr key={p.id}>
+                        <td style={{ color: "var(--texto-suave)", fontSize: 12, whiteSpace: "nowrap" }}>
+                          {new Date(p.fecha + "T00:00:00").toLocaleDateString("es-CO", {
+                            day: "2-digit", month: "short",
+                          })}
+                        </td>
+                        <td>
+                          <div>
+                            <span className="partido-nombre">{p.local}</span>
+                            <span className="vs-text" style={{ margin: "0 8px" }}>vs</span>
+                            <span className="partido-nombre">{p.visitante}</span>
+                          </div>
+                          
+                          {/* 3. NUEVO: Renderizamos dinámicamente las apuestas que ya se guardaron */}
+                          {misApuestasPartidas.length > 0 && (
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                              {misApuestasPartidas.map((ap, index) => (
+                                <span 
+                                  key={ap.id || index} 
+                                  style={{
+                                    fontSize: "11px",
+                                    padding: "3px 8px",
+                                    background: "rgba(0,0,0,0.06)",
+                                    borderRadius: "12px",
+                                    color: "var(--texto-principal)",
+                                    border: "1px solid rgba(0,0,0,0.1)",
+                                    display: "inline-block"
+                                  }}
+                                >
+                                  Marcador #{index + 1}: <b>{ap.golesLocal} - {ap.golesVisitante}</b>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="score-pair" style={{ justifyContent: "center" }}>
+                            <input
+                              className="score-input"
+                              type="number"
+                              min="0"
+                              max="99"
+                              value={getScore(p.id, "local")}
+                              onChange={(e) => setScore(p.id, "local", e.target.value)}
+                              placeholder="0"
+                            />
+                            <span className="score-sep">–</span>
+                            <input
+                              className="score-input"
+                              type="number"
+                              min="0"
+                              max="99"
+                              value={getScore(p.id, "visitante")}
+                              onChange={(e) => setScore(p.id, "visitante", e.target.value)}
+                              placeholder="0"
+                            />
+                          </div>
+                        </td>
+                        <td>
+                          {guardados[p.id] ? (
+                            <span className="apuesta-saved">✓ Guardado</span>
+                          ) : (
+                            <button className="btn-save" onClick={() => handleGuardar(p)}>
+                              Guardar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
