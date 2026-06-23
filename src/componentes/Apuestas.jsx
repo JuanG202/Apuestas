@@ -8,7 +8,7 @@ export default function Apuestas() {
   const [scores, setScores] = useState({});
   const [guardados, setGuardados] = useState({});
   
-  // ✨ NUEVO: Estado para saber si eres Administrador
+  // Estado para el rol de administrador
   const [isAdmin, setIsAdmin] = useState(false);
 
   const fechasDisponibles = [...new Set(partidos.map((p) => p.fecha))].sort();
@@ -17,7 +17,6 @@ export default function Apuestas() {
     ? partidos.filter((p) => p.fecha === fechaFiltro)
     : partidos;
 
-  // Filtra TODAS las apuestas del usuario seleccionado para este partido
   const getTodasLasApuestas = (partidoId) =>
     apuestas.filter(
       (a) => a.usuarioId === usuarioSeleccionado?.id && a.partidoId === partidoId
@@ -60,19 +59,16 @@ export default function Apuestas() {
     }
   };
 
-  // ✨ NUEVA FUNCIÓN: Permite al Admin eliminar un marcador erróneo
   const handleEliminarApuesta = async (apuestaId) => {
     if (!window.confirm("¿Seguro que deseas eliminar esta apuesta del usuario?")) return;
     
     try {
-      // Reemplaza con la URL real de tu backend si es necesario
       const response = await fetch(`https://apuestas-back.vercel.app/api/apuestas/${apuestaId}`, {
         method: "DELETE"
       });
       
       if (response.ok) {
-        alert("Apuesta eliminada con éxito. Por favor refresca para ver los cambios.");
-        // Lo ideal aquí es que en el AppContext manejes un eliminarApuesta para limpiar el estado
+        alert("Apuesta eliminada con éxito.");
         window.location.reload(); 
       } else {
         alert("No se pudo eliminar la apuesta del servidor.");
@@ -82,11 +78,10 @@ export default function Apuestas() {
     }
   };
 
-  // ✨ NUEVA FUNCIÓN: Activa el modo admin mediante una contraseña simple
   const toggleAdminMode = () => {
     if (!isAdmin) {
       const pass = prompt("Introduce la contraseña de administrador:");
-      if (pass === "admin123") { // Puedes cambiar "admin123" por la clave que quieras
+      if (pass === "admin123") {
         setIsAdmin(true);
       } else {
         alert("Contraseña incorrecta");
@@ -98,33 +93,36 @@ export default function Apuestas() {
 
   return (
     <div>
-      <div className="section-header" style={{ display: "flex", justifyContent: "between", alignItems: "center" }}>
+      {/* Encabezado adaptado con diseño nativo flex */}
+      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
         <div>
           <h1>Apuestas</h1>
           <p>Selecciona un usuario y registra sus predicciones de resultado</p>
         </div>
         
-        {/* ✨ BOTÓN DE PANEL ADMIN */}
+        {/* BOTÓN MODO ADMIN: Copia exacta de clases y variables nativas */}
         <button 
           onClick={toggleAdminMode} 
+          className="btn-save"
           style={{
-            padding: "8px 16px",
-            background: isAdmin ? "#e63946" : "var(--color-primario, #007bff)",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "bold"
+            whiteSpace: "nowrap",
+            background: isAdmin ? "rgba(230, 57, 70, 0.1)" : "transparent",
+            color: isAdmin ? "#e63946" : "var(--texto-suave)",
+            border: isAdmin ? "1px solid #e63946" : "1px solid var(--borde)",
+            padding: "6px 12px",
+            fontSize: 12
           }}
         >
-          {isAdmin ? "🔒 Salir de Modo Admin" : "🔑 Modo Admin"}
+          {isAdmin ? "🔒 Salir Admin" : "🔑 Modo Admin"}
         </button>
       </div>
 
-      {/* Alerta visual si está en Modo Admin */}
+      {/* Alerta de aviso integrada estéticamente en una tarjeta limpia */}
       {isAdmin && (
-        <div style={{ background: "#ffe3e3", color: "#b71c1c", padding: "10px", borderRadius: "6px", marginBottom: "16px", fontWeight: "bold", fontSize: "14px" }}>
-          ⚠️ Estás en MODO ADMINISTRADOR. Puedes ver y eliminar marcadores de cualquier usuario.
+        <div className="card" style={{ borderLeft: "4px solid #e63946", padding: "12px 16px", marginBottom: 16 }}>
+          <p style={{ color: "var(--texto-principal)", fontSize: 13, margin: 0, fontWeight: "500" }}>
+            ⚠️ <span style={{ color: "#e63946", fontWeight: "bold" }}>Modo Administrador Activo:</span> Puedes visualizar y remover marcadores de cualquier usuario registrado.
+          </p>
         </div>
       )}
 
@@ -222,19 +220,19 @@ export default function Apuestas() {
                                   key={ap.id || ap._id || index} 
                                   style={{
                                     fontSize: "11px",
-                                    padding: "3px 8px",
-                                    background: "rgba(0,0,0,0.06)",
-                                    borderRadius: "12px",
+                                    padding: "4px 10px",
+                                    background: "var(--bg-body, rgba(0,0,0,0.03))",
+                                    borderRadius: "100px",
                                     color: "var(--texto-principal)",
-                                    border: "1px solid rgba(0,0,0,0.1)",
+                                    border: "1px solid var(--borde, rgba(0,0,0,0.08))",
                                     display: "inline-flex",
                                     alignItems: "center",
-                                    gap: "6px"
+                                    gap: "8px"
                                   }}
                                 >
                                   Marcador #{index + 1}: <b>{ap.golesLocal} - {ap.golesVisitante}</b>
                                   
-                                  {/* ✨ BOTÓN ACCIÓN ADMIN: Solo aparece si isAdmin es true */}
+                                  {/* BOTÓN X ELIMINAR: Estilizado sutilmente en armonía */}
                                   {isAdmin && (
                                     <button
                                       onClick={() => handleEliminarApuesta(ap.id || ap._id)}
@@ -245,7 +243,10 @@ export default function Apuestas() {
                                         cursor: "pointer",
                                         fontWeight: "bold",
                                         padding: "0 2px",
-                                        fontSize: "12px"
+                                        fontSize: "13px",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        transform: "translateY(-0.5px)"
                                       }}
                                       title="Eliminar esta apuesta"
                                     >
