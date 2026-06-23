@@ -5,7 +5,7 @@ const AppContext = createContext(null);
 // Detecta si estás en entorno local o en producción (Vercel)
 const API_URL = window.location.hostname === "localhost" 
   ? "https://apuestas-back.vercel.app//api" 
-  : "https://TU_URL_DE_VERCEL.vercel.app/api"; // Reemplaza cuando lo despliegues
+  : "https://apuestas-back.vercel.app/api"; // Reemplaza cuando lo despliegues
 
 export function AppProvider({ children }) {
   const [usuarios, setUsuarios] = useState([]);
