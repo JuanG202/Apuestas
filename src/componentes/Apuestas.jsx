@@ -81,7 +81,7 @@ export default function Apuestas() {
   const toggleAdminMode = () => {
     if (!isAdmin) {
       const pass = prompt("Introduce la contraseña de administrador:");
-      if (pass === "admin123") {
+      if (pass === "Admin123") {
         setIsAdmin(true);
       } else {
         alert("Contraseña incorrecta");
