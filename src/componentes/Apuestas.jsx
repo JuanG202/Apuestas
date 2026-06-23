@@ -2,14 +2,15 @@ import { useState } from "react";
 import { useApp } from "../context/AppContext";
 
 export default function Apuestas() {
-  const { usuarios, partidos, apuestas, guardarApuesta } = useApp();
+  const { usuarios, partidos, apuestas, guardarApuesta, eliminarApuestaEstado, actualizarApuestaEstado } = useApp();
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
   const [fechaFiltro, setFechaFiltro] = useState("");
   const [scores, setScores] = useState({});
   const [guardados, setGuardados] = useState({});
-  
-  // Estado para el rol de administrador
   const [isAdmin, setIsAdmin] = useState(false);
+  
+  // ✨ NUEVO: Guarda la apuesta que el admin decide editar
+  const [apuestaEditando, setApuestaEditando] = useState(null);
 
   const fechasDisponibles = [...new Set(partidos.map((p) => p.fecha))].sort();
 
@@ -34,6 +35,17 @@ export default function Apuestas() {
     setGuardados((prev) => ({ ...prev, [partidoId]: false }));
   };
 
+  // Selecciona la apuesta para editarla en los inputs
+  const seleccionarParaEditar = (apuesta, partidoId) => {
+    if (!isAdmin) return;
+    setApuestaEditando(apuesta);
+    setScores((prev) => ({
+      ...prev,
+      [`${partidoId}-local`]: apuesta.golesLocal,
+      [`${partidoId}-visitante`]: apuesta.golesVisitante
+    }));
+  };
+
   const handleGuardar = async (partido) => {
     if (!usuarioSeleccionado) return;
     
@@ -43,7 +55,23 @@ export default function Apuestas() {
     if (gl === "" || gv === "") return;
     
     try {
-      await guardarApuesta(usuarioSeleccionado.id, partido.id, gl, gv);
+      // ✨ MODIFICADO: Si estamos editando, hace PUT. Si no, hace POST normal.
+      if (apuestaEditando && String(apuestaEditando.partidoId) === String(partido.id)) {
+        const idApuesta = apuestaEditando.id || apuestaEditando._id;
+        const response = await fetch(`https://apuestas-back.vercel.app/api/apuestas/${idApuesta}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ golesLocal: gl, golesVisitante: gv })
+        });
+
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        actualizarApuestaEstado(data);
+        setApuestaEditando(null); // Apaga el modo edición
+      } else {
+        // Guardado tradicional
+        await guardarApuesta(usuarioSeleccionado.id, partido.id, gl, gv);
+      }
       
       setScores((prev) => ({
         ...prev,
@@ -54,8 +82,8 @@ export default function Apuestas() {
       setGuardados((prev) => ({ ...prev, [partido.id]: true }));
       setTimeout(() => setGuardados((prev) => ({ ...prev, [partido.id]: false })), 2000);
     } catch (error) {
-      console.error("Error al guardar la apuesta:", error);
-      alert("No se pudo guardar la apuesta. Intenta de nuevo.");
+      console.error("Error al procesar la apuesta:", error);
+      alert("No se pudo procesar la operación.");
     }
   };
 
@@ -66,12 +94,13 @@ export default function Apuestas() {
       const response = await fetch(`https://apuestas-back.vercel.app/api/apuestas/${apuestaId}`, {
         method: "DELETE"
       });
-      
       if (response.ok) {
-        alert("Apuesta eliminada con éxito.");
-        window.location.reload(); 
+        eliminarApuestaEstado(apuestaId);
+        if (apuestaEditando && (apuestaEditando.id === apuestaId || apuestaEditando._id === apuestaId)) {
+          setApuestaEditando(null);
+        }
       } else {
-        alert("No se pudo eliminar la apuesta del servidor.");
+        alert("No se pudo eliminar de la base de datos.");
       }
     } catch (error) {
       console.error("Error al eliminar:", error);
@@ -88,19 +117,18 @@ export default function Apuestas() {
       }
     } else {
       setIsAdmin(false);
+      setApuestaEditando(null);
     }
   };
 
   return (
     <div>
-      {/* Encabezado adaptado con diseño nativo flex */}
       <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
         <div>
           <h1>Apuestas</h1>
           <p>Selecciona un usuario y registra sus predicciones de resultado</p>
         </div>
         
-        {/* BOTÓN MODO ADMIN: Copia exacta de clases y variables nativas */}
         <button 
           onClick={toggleAdminMode} 
           className="btn-save"
@@ -117,11 +145,10 @@ export default function Apuestas() {
         </button>
       </div>
 
-      {/* Alerta de aviso integrada estéticamente en una tarjeta limpia */}
       {isAdmin && (
         <div className="card" style={{ borderLeft: "4px solid #e63946", padding: "12px 16px", marginBottom: 16 }}>
           <p style={{ color: "var(--texto-principal)", fontSize: 13, margin: 0, fontWeight: "500" }}>
-            ⚠️ <span style={{ color: "#e63946", fontWeight: "bold" }}>Modo Administrador Activo:</span> Puedes visualizar y remover marcadores de cualquier usuario registrado.
+            ⚠️ <span style={{ color: "#e63946", fontWeight: "bold" }}>Modo Administrador Activo:</span> Haz clic sobre cualquier marcador para editarlo en los recuadros o usa la <b>✕</b> para borrarlo.
           </p>
         </div>
       )}
@@ -142,6 +169,7 @@ export default function Apuestas() {
                   setUsuarioSeleccionado(u);
                   setScores({});
                   setGuardados({});
+                  setApuestaEditando(null);
                 }}
               >
                 <div className="avatar">{u.nombre[0].toUpperCase()}</div>
@@ -191,16 +219,17 @@ export default function Apuestas() {
                   <tr>
                     <th>Fecha</th>
                     <th>Partido e Historial de Apuestas</th>
-                    <th style={{ textAlign: "center" }}>Nueva Predicción</th>
+                    <th style={{ textAlign: "center" }}>{apuestaEditando ? "Modificar Marcador" : "Nueva Predicción"}</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {partidosMostrar.map((p) => {
                     const misApuestasPartidas = getTodasLasApuestas(p.id);
+                    const esEditandoEstePartido = apuestaEditando && String(apuestaEditando.partidoId) === String(p.id);
 
                     return (
-                      <tr key={p.id}>
+                      <tr key={p.id} style={{ background: esEditandoEstePartido ? "rgba(0,123,255,0.02)" : "transparent" }}>
                         <td style={{ color: "var(--texto-suave)", fontSize: 12, whiteSpace: "nowrap" }}>
                           {new Date(p.fecha + "T00:00:00").toLocaleDateString("es-CO", {
                             day: "2-digit", month: "short",
@@ -215,46 +244,52 @@ export default function Apuestas() {
                           
                           {misApuestasPartidas.length > 0 && (
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                              {misApuestasPartidas.map((ap, index) => (
-                                <span 
-                                  key={ap.id || ap._id || index} 
-                                  style={{
-                                    fontSize: "11px",
-                                    padding: "4px 10px",
-                                    background: "var(--bg-body, rgba(0,0,0,0.03))",
-                                    borderRadius: "100px",
-                                    color: "var(--texto-principal)",
-                                    border: "1px solid var(--borde, rgba(0,0,0,0.08))",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "8px"
-                                  }}
-                                >
-                                  Marcador #{index + 1}: <b>{ap.golesLocal} - {ap.golesVisitante}</b>
-                                  
-                                  {/* BOTÓN X ELIMINAR: Estilizado sutilmente en armonía */}
-                                  {isAdmin && (
-                                    <button
-                                      onClick={() => handleEliminarApuesta(ap.id || ap._id)}
-                                      style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        color: "#e63946",
-                                        cursor: "pointer",
-                                        fontWeight: "bold",
-                                        padding: "0 2px",
-                                        fontSize: "13px",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        transform: "translateY(-0.5px)"
-                                      }}
-                                      title="Eliminar esta apuesta"
-                                    >
-                                      ✕
-                                    </button>
-                                  )}
-                                </span>
-                              ))}
+                              {misApuestasPartidas.map((ap, index) => {
+                                const esMarcadorSeleccionado = apuestaEditando && String(apuestaEditando.id || apuestaEditando._id) === String(ap.id || ap._id);
+                                return (
+                                  <span 
+                                    key={ap.id || ap._id || index} 
+                                    onClick={() => seleccionarParaEditar(ap, p.id)}
+                                    style={{
+                                      fontSize: "11px",
+                                      padding: "4px 10px",
+                                      background: esMarcadorSeleccionado ? "rgba(0,123,255,0.1)" : "var(--bg-body, rgba(0,0,0,0.03))",
+                                      borderRadius: "100px",
+                                      color: "var(--texto-principal)",
+                                      border: esMarcadorSeleccionado ? "1px solid var(--color-primario, #007bff)" : "1px solid var(--borde, rgba(0,0,0,0.08))",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "8px",
+                                      cursor: isAdmin ? "pointer" : "default"
+                                    }}
+                                    title={isAdmin ? "Haz clic para modificar" : ""}
+                                  >
+                                    Marcador #{index + 1}: <b>{ap.golesLocal} - {ap.golesVisitante}</b>
+                                    
+                                    {isAdmin && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Evita que abra la edición al borrar
+                                          handleEliminarApuesta(ap.id || ap._id);
+                                        }}
+                                        style={{
+                                          border: "none",
+                                          background: "transparent",
+                                          color: "#e63946",
+                                          cursor: "pointer",
+                                          fontWeight: "bold",
+                                          padding: "0 2px",
+                                          fontSize: "13px",
+                                          display: "flex",
+                                          alignItems: "center"
+                                        }}
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </span>
+                                );
+                              })}
                             </div>
                           )}
                         </td>
@@ -268,6 +303,7 @@ export default function Apuestas() {
                               value={getScore(p.id, "local")}
                               onChange={(e) => setScore(p.id, "local", e.target.value)}
                               placeholder="0"
+                              style={{ border: esEditandoEstePartido ? "1px solid var(--color-primario, #007bff)" : "" }}
                             />
                             <span className="score-sep">–</span>
                             <input
@@ -278,17 +314,18 @@ export default function Apuestas() {
                               value={getScore(p.id, "visitante")}
                               onChange={(e) => setScore(p.id, "visitante", e.target.value)}
                               placeholder="0"
+                              style={{ border: esEditandoEstePartido ? "1px solid var(--color-primario, #007bff)" : "" }}
                             />
                           </div>
                         </td>
                         <td>
-                          {guardados[p.id] ? (
-                            <span className="apuesta-saved">✓ Guardado</span>
-                          ) : (
-                            <button className="btn-save" onClick={() => handleGuardar(p)}>
-                              Guardar
-                            </button>
-                          )}
+                          <button 
+                            className="btn-save" 
+                            onClick={() => handleGuardar(p)}
+                            style={{ background: esEditandoEstePartido ? "var(--color-primario, #007bff)" : "" }}
+                          >
+                            {guardados[p.id] ? "✓" : esEditandoEstePartido ? "Actualizar" : "Guardar"}
+                          </button>
                         </td>
                       </tr>
                     );
