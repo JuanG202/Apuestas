@@ -23,13 +23,22 @@ export default function Resultados() {
     setGuardados((prev) => ({ ...prev, [partidoId]: false }));
   };
 
-  const handleGuardar = (p) => {
+  // Modificamos a función asíncrona para sincronizar con la base de datos
+  const handleGuardar = async (p) => {
     const gl = scores[`${p.id}-local`] ?? getResultado(p.id)?.golesLocal ?? "";
     const gv = scores[`${p.id}-visitante`] ?? getResultado(p.id)?.golesVisitante ?? "";
     if (gl === "" || gv === "") return;
-    guardarResultado(p.id, gl, gv);
-    setGuardados((prev) => ({ ...prev, [p.id]: true }));
-    setTimeout(() => setGuardados((prev) => ({ ...prev, [p.id]: false })), 2000);
+    
+    try {
+      // Esperamos que el servidor procese la creación o actualización (Upsert)
+      await guardarResultado(p.id, gl, gv);
+      
+      setGuardados((prev) => ({ ...prev, [p.id]: true }));
+      setTimeout(() => setGuardados((prev) => ({ ...prev, [p.id]: false })), 2000);
+    } catch (error) {
+      console.error("Error al guardar el resultado:", error);
+      alert("No se pudo registrar el resultado oficial. Intenta de nuevo.");
+    }
   };
 
   if (partidos.length === 0) {
@@ -133,4 +142,3 @@ export default function Resultados() {
     </div>
   );
 }
-

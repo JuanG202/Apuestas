@@ -7,11 +7,19 @@ export default function Partidos() {
   const [local, setLocal] = useState("");
   const [visitante, setVisitante] = useState("");
 
-  const handleGuardar = () => {
+  // Convertimos a asíncrono para esperar la confirmación del backend
+  const handleGuardar = async () => {
     if (!fecha || !local.trim() || !visitante.trim()) return;
-    agregarPartido({ fecha, local: local.trim(), visitante: visitante.trim() });
-    setLocal("");
-    setVisitante("");
+    
+    try {
+      await agregarPartido({ fecha, local: local.trim(), visitante: visitante.trim() });
+      // Limpiamos los campos solo tras un guardado exitoso
+      setLocal("");
+      setVisitante("");
+    } catch (error) {
+      console.error("Error al guardar el partido:", error);
+      alert("No se pudo guardar el partido. Intenta de nuevo.");
+    }
   };
 
   const fechasUnicas = [...new Set(partidos.map((p) => p.fecha))].sort();
@@ -88,7 +96,7 @@ export default function Partidos() {
           </div>
         ))
       )}
-            <p className="created">
+      <p className="created">
         Created by:{" "}
         <a href="https://elmundodelatecnologiaf.vercel.app/" target="_blank" rel="noopener noreferrer" className="created-link">
           El Mundo de la tecnología

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 
-
 export default function Apuestas() {
   const { usuarios, partidos, apuestas, guardarApuesta } = useApp();
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
@@ -34,14 +33,25 @@ export default function Apuestas() {
     setGuardados((prev) => ({ ...prev, [partidoId]: false }));
   };
 
-  const handleGuardar = (partido) => {
+  // Convertimos a función asíncrona para esperar la respuesta de la base de datos
+  const handleGuardar = async (partido) => {
     if (!usuarioSeleccionado) return;
+    
     const gl = scores[`${partido.id}-local`] ?? getApuesta(partido.id)?.golesLocal ?? "";
     const gv = scores[`${partido.id}-visitante`] ?? getApuesta(partido.id)?.golesVisitante ?? "";
+    
     if (gl === "" || gv === "") return;
-    guardarApuesta(usuarioSeleccionado.id, partido.id, gl, gv);
-    setGuardados((prev) => ({ ...prev, [partido.id]: true }));
-    setTimeout(() => setGuardados((prev) => ({ ...prev, [partido.id]: false })), 2000);
+    
+    try {
+      // Esperamos a que la petición termine en el servidor
+      await guardarApuesta(usuarioSeleccionado.id, partido.id, gl, gv);
+      
+      setGuardados((prev) => ({ ...prev, [partido.id]: true }));
+      setTimeout(() => setGuardados((prev) => ({ ...prev, [partido.id]: false })), 2000);
+    } catch (error) {
+      console.error("Error al guardar la apuesta:", error);
+      alert("No se pudo guardar la apuesta. Intenta de nuevo.");
+    }
   };
 
   return (
@@ -178,7 +188,7 @@ export default function Apuestas() {
           <p>Selecciona un usuario para ver y registrar sus apuestas.</p>
         </div>
       )}
-            <p className="created">
+      <p className="created">
         Created by:{" "}
         <a href="https://elmundodelatecnologiaf.vercel.app/" target="_blank" rel="noopener noreferrer" className="created-link">
           El Mundo de la tecnología

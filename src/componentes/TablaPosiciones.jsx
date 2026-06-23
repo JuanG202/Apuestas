@@ -1,7 +1,7 @@
 import { useApp } from "../context/AppContext";
 
 export default function TablaPosiciones() {
-  const { getPuntosPorUsuario, resultados, partidos, apuestas } = useApp();
+  const { getPuntosPorUsuario, resultados, apuestas } = useApp();
   const ranking = getPuntosPorUsuario();
 
   const posClass = (i) => {
@@ -39,10 +39,11 @@ export default function TablaPosiciones() {
       ) : (
         <div className="card">
           {ranking.map((u, i) => {
-            const misApuestas = apuestas.filter((a) => a.usuarioId === u.id);
+            // Se garantiza la comparación limpia de IDs que provee el backend
+            const misApuestas = apuestas.filter((a) => String(a.usuarioId) === String(u.id));
             const exactos = resultados.filter((r) => {
-              const ap = misApuestas.find((a) => a.partidoId === r.partidoId);
-              return ap && ap.golesLocal === r.golesLocal && ap.golesVisitante === r.golesVisitante;
+              const ap = misApuestas.find((a) => String(a.partidoId) === String(r.partidoId));
+              return ap && Number(ap.golesLocal) === Number(r.golesLocal) && Number(ap.golesVisitante) === Number(r.golesVisitante);
             }).length;
 
             return (
@@ -78,7 +79,7 @@ export default function TablaPosiciones() {
           })}
         </div>
       )}
-            <p className="created">
+      <p className="created">
         Created by:{" "}
         <a href="https://elmundodelatecnologiaf.vercel.app/" target="_blank" rel="noopener noreferrer" className="created-link">
           El Mundo de la tecnología

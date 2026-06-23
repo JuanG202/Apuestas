@@ -1,6 +1,11 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 
 const AppContext = createContext(null);
+
+// Detecta si estás en entorno local o en producción (Vercel)
+const API_URL = window.location.hostname === "localhost" 
+  ? "https://apuestas-back.vercel.app//api" 
+  : "https://TU_URL_DE_VERCEL.vercel.app/api"; // Reemplaza cuando lo despliegues
 
 export function AppProvider({ children }) {
   const [usuarios, setUsuarios] = useState([]);
@@ -8,39 +13,94 @@ export function AppProvider({ children }) {
   const [apuestas, setApuestas] = useState([]);
   const [resultados, setResultados] = useState([]);
 
-  const agregarUsuario = (nombre) => {
-    setUsuarios((prev) => [...prev, { id: Date.now(), nombre }]);
+  // CARGAR DATOS DESDE EL BACKEND AL INICIAR LA APP
+  useEffect(() => {
+    const cargarDatosIniciales = async () => {
+      try {
+        const [resUsr, resPar, resApu, resRes] = await Promise.all([
+          fetch(`${API_URL}/usuarios`),
+          fetch(`${API_URL}/partidos`),
+          fetch(`${API_URL}/apuestas`),
+          fetch(`${API_URL}/resultados`)
+        ]);
+
+        if (resUsr.ok) setUsuarios(await resUsr.json());
+        if (resPar.ok) setPartidos(await resPar.json());
+        if (resApu.ok) setApuestas(await resApu.json());
+        if (resRes.ok) setResultados(await resRes.json());
+      } catch (error) {
+        console.error("Error al conectar con el servidor:", error);
+      }
+    };
+
+    cargarDatosIniciales();
+  }, []);
+
+  // MODIFICADO: Guarda en MongoDB en vez de usar un ID local temporal
+  const agregarUsuario = async (nombre) => {
+    const response = await fetch(`${API_URL}/usuarios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre }),
+    });
+    if (!response.ok) throw new Error("Error al guardar el usuario");
+    const nuevoUsuario = await response.json();
+    setUsuarios((prev) => [...prev, nuevoUsuario]);
   };
 
-  const agregarPartido = (partido) => {
-    setPartidos((prev) => [...prev, { id: Date.now(), ...partido }]);
+  // MODIFICADO: Guarda en MongoDB en vez de usar un ID local temporal
+  const agregarPartido = async (partido) => {
+    const response = await fetch(`${API_URL}/partidos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(partido),
+    });
+    if (!response.ok) throw new Error("Error al guardar el partido");
+    const nuevoPartido = await response.json();
+    setPartidos((prev) => [...prev, nuevoPartido]);
   };
 
-  const guardarApuesta = (usuarioId, partidoId, golesLocal, golesVisitante) => {
+  // MODIFICADO: Usa la ruta Upsert de Mongoose para guardar/actualizar apuestas
+  const guardarApuesta = async (usuarioId, partidoId, golesLocal, golesVisitante) => {
+    const response = await fetch(`${API_URL}/apuestas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuarioId, partidoId, golesLocal, golesVisitante }),
+    });
+    if (!response.ok) throw new Error("Error al guardar la apuesta");
+    const apuestaGuardada = await response.json();
+
     setApuestas((prev) => {
       const existe = prev.findIndex(
-        (a) => a.usuarioId === usuarioId && a.partidoId === partidoId
+        (a) => String(a.usuarioId) === String(usuarioId) && String(a.partidoId) === String(partidoId)
       );
-      const nueva = { usuarioId, partidoId, golesLocal: Number(golesLocal), golesVisitante: Number(golesVisitante) };
       if (existe >= 0) {
         const copia = [...prev];
-        copia[existe] = nueva;
+        copia[existe] = apuestaGuardada;
         return copia;
       }
-      return [...prev, nueva];
+      return [...prev, apuestaGuardada];
     });
   };
 
-  const guardarResultado = (partidoId, golesLocal, golesVisitante) => {
+  // MODIFICADO: Usa la ruta Upsert de Mongoose para resultados oficiales
+  const guardarResultado = async (partidoId, golesLocal, golesVisitante) => {
+    const response = await fetch(`${API_URL}/resultados`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ partidoId, golesLocal, golesVisitante }),
+    });
+    if (!response.ok) throw new Error("Error al guardar el resultado");
+    const resultadoGuardado = await response.json();
+
     setResultados((prev) => {
-      const existe = prev.findIndex((r) => r.partidoId === partidoId);
-      const nuevo = { partidoId, golesLocal: Number(golesLocal), golesVisitante: Number(golesVisitante) };
+      const existe = prev.findIndex((r) => String(r.partidoId) === String(partidoId));
       if (existe >= 0) {
         const copia = [...prev];
-        copia[existe] = nuevo;
+        copia[existe] = resultadoGuardado;
         return copia;
       }
-      return [...prev, nuevo];
+      return [...prev, resultadoGuardado];
     });
   };
 
@@ -48,33 +108,42 @@ export function AppProvider({ children }) {
     partidos.filter((p) => p.fecha === fecha);
 
   const getApuestasByUsuario = (usuarioId) =>
-    apuestas.filter((a) => a.usuarioId === usuarioId);
+    apuestas.filter((a) => String(a.usuarioId) === String(usuarioId));
 
+  // OPTIMIZADO: Garantizamos la equivalencia exacta de tipos (Mongoose IDs como Strings)
   const getAcertadores = (partidoId) => {
-    const resultado = resultados.find((r) => r.partidoId === partidoId);
-    if (!resultado) return null;
+    const resultado = resultados.find((r) => String(r.partidoId) === String(partidoId));
+    if (!resultado) return [];
     return apuestas
       .filter(
         (a) =>
-          a.partidoId === partidoId &&
-          a.golesLocal === resultado.golesLocal &&
-          a.golesVisitante === resultado.golesVisitante
+          String(a.partidoId) === String(partidoId) &&
+          Number(a.golesLocal) === Number(resultado.golesLocal) &&
+          Number(a.golesVisitante) === Number(resultado.golesVisitante)
       )
-      .map((a) => usuarios.find((u) => u.id === a.usuarioId))
+      .map((a) => usuarios.find((u) => String(u.id) === String(a.usuarioId)))
       .filter(Boolean);
   };
 
+  // OPTIMIZADO: Cálculo exacto de puntuaciones procesando la data de MongoDB
   const getPuntosPorUsuario = () => {
     return usuarios.map((u) => {
       const pts = resultados.reduce((acc, r) => {
         const apuesta = apuestas.find(
-          (a) => a.usuarioId === u.id && a.partidoId === r.partidoId
+          (a) => String(a.usuarioId) === String(u.id) && String(a.partidoId) === String(r.partidoId)
         );
         if (!apuesta) return acc;
-        if (apuesta.golesLocal === r.golesLocal && apuesta.golesVisitante === r.golesVisitante)
-          return acc + 3;
-        const ganadorReal = r.golesLocal > r.golesVisitante ? "local" : r.golesVisitante > r.golesLocal ? "visitante" : "empate";
-        const ganadorApuesta = apuesta.golesLocal > apuesta.golesVisitante ? "local" : apuesta.golesVisitante > apuesta.golesLocal ? "visitante" : "empate";
+        
+        const al = Number(apuesta.golesLocal);
+        const av = Number(apuesta.golesVisitante);
+        const rl = Number(r.golesLocal);
+        const rv = Number(r.golesVisitante);
+
+        if (al === rl && av === rv) return acc + 3;
+        
+        const ganadorReal = rl > rv ? "local" : rv > rl ? "visitante" : "empate";
+        const ganadorApuesta = al > av ? "local" : av > al ? "visitante" : "empate";
+        
         if (ganadorReal === ganadorApuesta) return acc + 1;
         return acc;
       }, 0);

@@ -5,11 +5,19 @@ export default function Usuarios() {
   const { usuarios, agregarUsuario } = useApp();
   const [nombre, setNombre] = useState("");
 
-  const handleAgregar = () => {
+  // Convertimos a función asíncrona para esperar la respuesta de la base de datos
+  const handleAgregar = async () => {
     const trim = nombre.trim();
     if (!trim) return;
-    agregarUsuario(trim);
-    setNombre("");
+    
+    try {
+      await agregarUsuario(trim);
+      // Limpiamos el input únicamente tras un guardado exitoso en el servidor
+      setNombre("");
+    } catch (error) {
+      console.error("Error al agregar el usuario:", error);
+      alert("No se pudo registrar el usuario. Intenta de nuevo.");
+    }
   };
 
   return (
@@ -75,7 +83,7 @@ export default function Usuarios() {
           </table>
         </div>
       )}
-            <p className="created">
+      <p className="created">
         Created by:{" "}
         <a href="https://elmundodelatecnologiaf.vercel.app/" target="_blank" rel="noopener noreferrer" className="created-link">
           El Mundo de la tecnología
