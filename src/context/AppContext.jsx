@@ -4,8 +4,8 @@ const AppContext = createContext(null);
 
 // Detecta si estás en entorno local o en producción (Vercel)
 const API_URL = window.location.hostname === "localhost" 
-  ? "https://apuestas-back.vercel.app//api" 
-  : "https://apuestas-back.vercel.app/api"; // Reemplaza cuando lo despliegues
+  ? "https://apuestas-back.vercel.app/api" 
+  : "https://apuestas-back.vercel.app/api";
 
 export function AppProvider({ children }) {
   const [usuarios, setUsuarios] = useState([]);
@@ -36,7 +36,7 @@ export function AppProvider({ children }) {
     cargarDatosIniciales();
   }, []);
 
-  // MODIFICADO: Guarda en MongoDB en vez de usar un ID local temporal
+  // Guarda en MongoDB en vez de usar un ID local temporal
   const agregarUsuario = async (nombre) => {
     const response = await fetch(`${API_URL}/usuarios`, {
       method: "POST",
@@ -48,7 +48,7 @@ export function AppProvider({ children }) {
     setUsuarios((prev) => [...prev, nuevoUsuario]);
   };
 
-  // MODIFICADO: Guarda en MongoDB en vez de usar un ID local temporal
+  // Guarda en MongoDB en vez de usar un ID local temporal
   const agregarPartido = async (partido) => {
     const response = await fetch(`${API_URL}/partidos`, {
       method: "POST",
@@ -60,7 +60,7 @@ export function AppProvider({ children }) {
     setPartidos((prev) => [...prev, nuevoPartido]);
   };
 
-  // MODIFICADO: Usa la ruta Upsert de Mongoose para guardar/actualizar apuestas
+  // CORREGIDO: Ahora agrega CADA apuesta nueva directamente al estado sin sustituirla
   const guardarApuesta = async (usuarioId, partidoId, golesLocal, golesVisitante) => {
     const response = await fetch(`${API_URL}/apuestas`, {
       method: "POST",
@@ -70,20 +70,12 @@ export function AppProvider({ children }) {
     if (!response.ok) throw new Error("Error al guardar la apuesta");
     const apuestaGuardada = await response.json();
 
-    setApuestas((prev) => {
-      const existe = prev.findIndex(
-        (a) => String(a.usuarioId) === String(usuarioId) && String(a.partidoId) === String(partidoId)
-      );
-      if (existe >= 0) {
-        const copia = [...prev];
-        copia[existe] = apuestaGuardada;
-        return copia;
-      }
-      return [...prev, apuestaGuardada];
-    });
+    // ✨ SOLUCIÓN AQUÍ: Ya no buscamos si existe previamente para pisarla.
+    // Retornamos directamente un arreglo que clona las anteriores y añade la nueva apuesta.
+    setApuestas((prev) => [...prev, apuestaGuardada]);
   };
 
-  // MODIFICADO: Usa la ruta Upsert de Mongoose para resultados oficiales
+  // Usa la ruta Upsert de Mongoose para resultados oficiales
   const guardarResultado = async (partidoId, golesLocal, golesVisitante) => {
     const response = await fetch(`${API_URL}/resultados`, {
       method: "POST",
@@ -110,7 +102,7 @@ export function AppProvider({ children }) {
   const getApuestasByUsuario = (usuarioId) =>
     apuestas.filter((a) => String(a.usuarioId) === String(usuarioId));
 
-  // OPTIMIZADO: Garantizamos la equivalencia exacta de tipos (Mongoose IDs como Strings)
+  // Garantizamos la equivalencia exacta de tipos (Mongoose IDs como Strings)
   const getAcertadores = (partidoId) => {
     const resultado = resultados.find((r) => String(r.partidoId) === String(partidoId));
     if (!resultado) return [];
@@ -125,10 +117,12 @@ export function AppProvider({ children }) {
       .filter(Boolean);
   };
 
-  // OPTIMIZADO: Cálculo exacto de puntuaciones procesando la data de MongoDB
+  // Cálculo exacto de puntuaciones procesando la data de MongoDB
   const getPuntosPorUsuario = () => {
     return usuarios.map((u) => {
       const pts = resultados.reduce((acc, r) => {
+        // Nota: Como ahora permites múltiples apuestas por partido, .find() tomará 
+        // la primera para el cálculo del puntaje global.
         const apuesta = apuestas.find(
           (a) => String(a.usuarioId) === String(u.id) && String(a.partidoId) === String(r.partidoId)
         );
