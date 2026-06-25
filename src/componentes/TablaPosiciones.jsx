@@ -1,4 +1,4 @@
-import { useApp } from "../context/AppContext";
+/*import { useApp } from "../context/AppContext";
 
 export default function TablaPosiciones() {
   const { getPuntosPorUsuario, resultados, apuestas } = useApp();
@@ -87,4 +87,4 @@ export default function TablaPosiciones() {
       </p>
     </div>
   );
-}
+}*/

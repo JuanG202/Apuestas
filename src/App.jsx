@@ -12,7 +12,7 @@ const NAV = [
   { id: "partidos", label: "Partidos", icon: "📅", privado: true }, // Marcado como privado
   { id: "resultados", label: "Resultados", icon: "✅", privado: true }, // Marcado como privado
   { id: "apuestas", label: "Apuestas", icon: "🎯" },
-  { id: "tabla", label: "Tabla", icon: "🏆" },
+  /*{ id: "tabla", label: "Tabla", icon: "🏆" },*/
 ];
 
 function App() {
@@ -85,7 +85,7 @@ function App() {
           {vista === "partidos" && <Partidos />}
           {vista === "apuestas" && <Apuestas />}
           {vista === "resultados" && <Resultados />}
-          {vista === "tabla" && <TablaPosiciones />}
+          {/*vista === "tabla" && <TablaPosiciones />*/}
         </main>
       </div>
     </AppProvider>
